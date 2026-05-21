@@ -140,6 +140,28 @@ class _MapScreenState extends State<MapScreen> {
               MarkerLayer(markers: markers),
             ],
           ),
+          if (position == null && _error == null)
+            Container(
+              color: Colors.black.withValues(alpha: 0.35),
+              child: const Center(
+                child: Card(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 20,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text('Obtendo localização...'),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           if (_error != null)
             Positioned(
               top: 16,
