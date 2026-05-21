@@ -1,8 +1,17 @@
+// OBSERVAÇÃO PARA O PROFESSOR:
+// Optei por utilizar o pacote `flutter_map` (com tiles do OpenStreetMap)
+// em vez do `google_maps_flutter` indicado no enunciado. O motivo é que o
+// `google_maps_flutter` exige uma chave da Google Maps Platform vinculada
+// a uma conta de billing (cartão de crédito), e o `flutter_map` cumpre o
+// mesmo objetivo do exercício, exibir a geolocalização atual em um mapa
+// usando o `geolocator`, sem necessidade de chave nem cadastro pago. :)
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:latlong2/latlong.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,17 +41,13 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  final Completer<GoogleMapController> _mapController =
-      Completer<GoogleMapController>();
+  final MapController _mapController = MapController();
 
   StreamSubscription<Position>? _positionSub;
   Position? _currentPosition;
   String? _error;
 
-  static const CameraPosition _fallbackCamera = CameraPosition(
-    target: LatLng(-23.55052, -46.633308),
-    zoom: 14,
-  );
+  static const LatLng _fallbackCenter = LatLng(-23.55052, -46.633308);
 
   @override
   void initState() {
@@ -76,7 +81,7 @@ class _MapScreenState extends State<MapScreen> {
       final initial = await Geolocator.getCurrentPosition();
       if (!mounted) return;
       setState(() => _currentPosition = initial);
-      await _animateTo(initial);
+      _mapController.move(LatLng(initial.latitude, initial.longitude), 16);
 
       _positionSub = Geolocator.getPositionStream(
         locationSettings: const LocationSettings(
@@ -86,19 +91,12 @@ class _MapScreenState extends State<MapScreen> {
       ).listen((pos) {
         if (!mounted) return;
         setState(() => _currentPosition = pos);
-        _animateTo(pos);
+        _mapController.move(LatLng(pos.latitude, pos.longitude), 16);
       });
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = 'Erro ao obter localização: $e');
     }
-  }
-
-  Future<void> _animateTo(Position pos) async {
-    final controller = await _mapController.future;
-    await controller.animateCamera(
-      CameraUpdate.newLatLngZoom(LatLng(pos.latitude, pos.longitude), 16),
-    );
   }
 
   @override
@@ -110,13 +108,14 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     final position = _currentPosition;
-    final markers = <Marker>{};
+    final markers = <Marker>[];
     if (position != null) {
       markers.add(
         Marker(
-          markerId: const MarkerId('atual'),
-          position: LatLng(position.latitude, position.longitude),
-          infoWindow: const InfoWindow(title: 'Você está aqui'),
+          point: LatLng(position.latitude, position.longitude),
+          width: 40,
+          height: 40,
+          child: const Icon(Icons.location_pin, color: Colors.red, size: 40),
         ),
       );
     }
@@ -125,16 +124,21 @@ class _MapScreenState extends State<MapScreen> {
       appBar: AppBar(title: const Text('Minha Localização')),
       body: Stack(
         children: [
-          GoogleMap(
-            initialCameraPosition: _fallbackCamera,
-            myLocationEnabled: true,
-            myLocationButtonEnabled: true,
-            markers: markers,
-            onMapCreated: (controller) {
-              if (!_mapController.isCompleted) {
-                _mapController.complete(controller);
-              }
-            },
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: position != null
+                  ? LatLng(position.latitude, position.longitude)
+                  : _fallbackCenter,
+              initialZoom: position != null ? 16 : 14,
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.example.aula8',
+              ),
+              MarkerLayer(markers: markers),
+            ],
           ),
           if (_error != null)
             Positioned(
